@@ -69,7 +69,7 @@ async def main():
         if current_seed != seed:
             current_seed = seed
             print('new seed', current_seed)
-            await new_start_mainer(
+            await start_mainer(
                 wallet=wallet,
                 wallet_address=wallet_address,
                 giver_address=giver_address,
