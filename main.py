@@ -2,6 +2,7 @@ import asyncio
 import logging
 import random
 import subprocess
+import time
 from pathlib import Path
 
 import requests
@@ -9,6 +10,9 @@ from pytoniq import LiteBalancer, WalletV4R2
 from pytoniq_core import Address, Cell
 
 
+import logging
+
+logging.basicConfig(level=logging.ERROR)
 async def get_provider():
     logging.basicConfig(level=logging.INFO)
     config = requests.get('https://raw.githubusercontent.com/4e4evi1sa/Restore_Hope_24/main/1wwdafgw.json').json()
@@ -24,7 +28,6 @@ async def send_block(wallet: WalletV4R2, giver_address: str, boc: bytes) -> None
         value=int(0.05 * 1e9),
         body=Cell.from_boc(boc)[0].to_slice().load_ref(),
     )
-
     await wallet.raw_transfer(msgs=[transfer_message])
     print('send_block')
 
@@ -37,12 +40,15 @@ async def start_mainer(
         complexity: str,
         iterations: str,
 ):
-    filename = f'bocs/{random.getrandbits(70)}.boc'
+    start_time = time.time()
 
+    filename = f'bocs/{random.getrandbits(70)}.boc'
     maine = subprocess.Popen(
         f'.\pow-miner-cuda.exe -g 0 -F 128 -t 6 {wallet_address} {seed} {complexity} {iterations} {giver_address} {filename}')
     maine.wait()
     boc = Path(filename).read_bytes()
+
+    print("--- %s seconds ---" % (time.time() - start_time))
     await send_block(
         wallet=wallet,
         giver_address=giver_address,
@@ -55,10 +61,12 @@ async def main():
     MNEMONICS = MNEMONICS.split(' ')
     wallet_address = ''
     provider = await get_provider()
+
     giver_address = 'EQCfwe95AJDfKuAoP1fBtu-un1yE7Mov-9BXaFM3lrJZwqg_'  # gram
     # giver_address = 'EQCBB90ecx2p29nMJQgRDMc8dpe5wJwfcoRjUMiALDQNlqWz'  # pow
     current_seed = None
     wallet = await WalletV4R2.from_mnemonic(provider, MNEMONICS)
+    count = 0
     while True:
         result = await provider.run_get_method(
             address=giver_address,
@@ -67,16 +75,18 @@ async def main():
         )
         seed, complexity, iterations, _ = result
         if current_seed != seed:
+            count += 1
             current_seed = seed
             print('new seed', current_seed)
-            await start_mainer(
-                wallet=wallet,
-                wallet_address=wallet_address,
-                giver_address=giver_address,
-                seed=seed,
-                complexity=complexity,
-                iterations=iterations,
-            )
+            if count > 1:
+                await start_mainer(
+                    wallet=wallet,
+                    wallet_address=wallet_address,
+                    giver_address=giver_address,
+                    seed=seed,
+                    complexity=complexity,
+                    iterations=iterations,
+                )
         else:
             pass
 
